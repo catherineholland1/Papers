@@ -24,8 +24,6 @@ library(magrittr)
 
 ## SET WORKING DIRECTORY ##
 
-setwd("~/Library/CloudStorage/OneDrive-UniversityofGlasgow/Documents/PhD Papers : Journals/Spatial/Statistical Modelling Journal/Spatial/")
-
 source("Code/beta-binomial_nimblefunction.R")
 
 
@@ -387,28 +385,9 @@ run_MCMC <- function(X,
                      samplesAsCodaMCMC = TRUE,
                      setSeed = chain_seed[X])
   
-  #return(samples)
   return(list(initial_values = initial_values, samples = samples))
   
 }
-
-# system.time({
-#   test <- run_MCMC(X=1,
-#                    initial_seed = initial_seed,
-#                    chain_seed = chain_seed,
-#                    x_missing = x_missing,
-#                    y = y,
-#                    Z = Z,
-#                    S1 = S1,
-#                    N = N_fit,
-#                    N_types = N_types,
-#                    N_basis = N_basis,
-#                    niter = 200,
-#                    nburn = 100,
-#                    nthin =   1)
-# })
-
-
 
 
 ### RUN MODEL ####
@@ -446,7 +425,7 @@ run_time
 
 ## OUTPUT ####
 
-save(samples, file = paste0('output/spatial_model_missing_output_', Sys.Date(), '_polynomial_phi.RData'))
+save(samples, file = paste0('output/spatial_model_missing_output_', Sys.Date(), '.RData'))
 
 
 samples_list <- lapply(samples, function(chain) chain$samples)
@@ -512,15 +491,6 @@ for (i in 1:N_samples) {
 x_samples
 
 
-#######################.
-
-## SAVE PREDICTIONS ####
-
-saveRDS(x_samples, "output/gdm_predictions_polynomial_phi.rds")
-
-
-#######################.
-
 b_samples <- subset_b(output)%>%unlist()%>%array(dim=c(N_samples,N_basis,N_types))
 
 phi_samples <- subset_phi(output)%>%unlist()%>%array(dim=c(N_samples,N_fit,N_types))
@@ -531,9 +501,7 @@ mu_samples_full <- array(NA,dim=c(N_samples,N,N_types))
 for(d in 1:N_types){
   mu_samples_full[,,d] <- expit(b_samples[,,d]%*%t(Z_full))
 }
-
-saveRDS(mu_samples_full, "output/mu_samples_full_polynomial.rds")
-
+                   
 x_mean_samples_full <- array(NA,dim=c(N_samples,N,N_types))
 x_mean_samples_full[,,1] <- mu_samples_full[,,1]
 x_mean_samples_full[,,2] <- mu_samples_full[,,2]*(1-x_mean_samples_full[,,1])
@@ -541,7 +509,14 @@ for(d in 3:N_types){
   x_mean_samples_full[,,d] <- mu_samples_full[,,d]*(1-apply(x_mean_samples_full[,,1:(d-1)],c(1,2),sum))
 }
 
-saveRDS(x_mean_samples_full, "output/x_mean_samples_full_polynomial.rds")
+
+### SAVE PREDICTIONS ####
+
+saveRDS(x_samples, "output/gdm_predictions.rds")
+
+saveRDS(mu_samples_full, "output/mu_samples_full.rds")
+
+saveRDS(x_mean_samples_full, "output/x_mean_samples_full.rds")
 
 
 #######################.
@@ -604,6 +579,5 @@ predicted_counts <- cbind(larch = larch_predict,
 
 
 saveRDS(predicted_counts,file="output/predictions_GAM.rds")
-
 
 #######################.
