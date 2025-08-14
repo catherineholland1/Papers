@@ -11,15 +11,11 @@ library(ggplot2)
 
 #######################.
 
-## SET WORKING DIRECTORY ####
-
-setwd("~/PhD/Spatial - Paper/")
-
-#######################.
-
 ## MISSING TREE DATA ####
 
 tree_data <- readRDS("Data/tree_counts_1000.rds")
+
+tree_proportions <- readRDS("Data/tree_proportions.rds")
 
 
 #### SPATIAL LOCATIONS ####
@@ -161,35 +157,13 @@ missing_tree_plot %>%
   ggtitle("Heatmap for Modelled Tree Species with Missing Counts") 
 
 
-# pdf("output/heatmap_missing.pdf", height = 4.75)
-# missing_tree_plot %>%
-#   ggplot(aes(x = X_coord, y = Y_coord, fill = count)) +
-#   geom_tile(data = missing_tree_plot %>% filter(!is.na(count))) +
-#   scale_fill_viridis_c() +
-#   
-#   theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
-#   facet_wrap(~type) +
-#   
-#   geom_tile(data = missing_tree_plot %>% filter(is.na(count)), aes(colour = ""),
-#             linetype = 0, fill = "#FC8D62") +
-#   
-#   labs(x = "", y = "",
-#        fill = "Count", colour = "Missing Count") +
-#   
-#   theme(legend.position = "bottom",
-#         legend.margin = margin(t=-15)) 
-# dev.off()
-
-
 #######################.
-
-tree_proportions <- readRDS("Data/tree_proportions.rds")
 
 ## LOAD PREDICTIONS ####
 
 ### GDM ####
 
-gdm_predictions <- readRDS("output/gdm_predictions_polynomial_phi.rds") %>%
+gdm_predictions <- readRDS("output/gdm_predictions.rds") %>%
   
   apply(., c(1,2), mean) %>%
   
@@ -209,8 +183,8 @@ gdm_predictions <- readRDS("output/gdm_predictions_polynomial_phi.rds") %>%
   
   mutate(model = "GDM")
 
-x_mean_samples_full <- readRDS("output/x_mean_samples_full_polynomial.rds")
-mu_samples_full <- readRDS("output/mu_samples_full_polynomial.rds")
+x_mean_samples_full <- readRDS("output/x_mean_samples_full.rds")
+mu_samples_full <- readRDS("output/mu_samples_full.rds")
 
 excluded_x_pred_df <- apply(x_mean_samples_full,c(2,3),mean)%>%as.data.frame()%>%
   rename(larch = "V1",
@@ -236,10 +210,6 @@ gam_predictions_full <- readRDS("output/predictions_GAM.rds")
 gam_predictions_400 <- gam_predictions_full[fit_rows,] %>%
   
   as.data.frame() %>%
-  # rename(larch = 'V1',
-  #        oak = 'V2',
-  #        sitka_spruce = 'V3',
-  #        sycamore = 'V4') %>%
   cbind(missing_tree_data %>% select(contains("coord"),
                                      contains("missing")))%>%
   pivot_longer(., cols = larch:sycamore, 
@@ -1036,3 +1006,5 @@ comparison_data%>%filter(model=="GDM",type=="larch")%>%group_by(n_missing)%>%
             oak_missing=sum(oak_missing),
             sitka_spruce_missing=sum(sitka_spruce_missing),
             sycamore_missing=sum(sycamore_missing))
+
+#######################.
