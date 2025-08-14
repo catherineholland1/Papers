@@ -32,14 +32,13 @@ library(mnormt)
 
 ## SET WORKING DIRECTORY ####
 
-setwd("~/Library/CloudStorage/OneDrive-UniversityofGlasgow/Documents/PhD R Code/Forensic Glass/Full Data/no_transformation")
-#setwd("~/OneDrive/Documents/PhD/R/Bayesian Hierarchical Model - Forensic Glass/Full Data/update_2024/server")
+setwd("Code/Full Data/")
 
 ##################################.
 
 ## DATA ####
 
-glass <- read.table("~/Library/CloudStorage/OneDrive-UniversityofGlasgow/Documents/PhD R Code/Forensic Glass/Data/database_190310.txt", header = T)
+glass <- read.table("Data/simulated_forensic_glass.txt", header = T)
 
 glass$Type <- as.factor(sapply(glass$Name, function(x) substr(x, 1, 1)))
 
@@ -412,7 +411,7 @@ run_time <- system.time({
                         piece_index = piece_index,
                         
                         
-                        niter =   1000, 
+                        niter =  1000, 
                         nburnin = 500, 
                         nthin =      1)
     
@@ -435,10 +434,7 @@ mcmc_output <- lapply(kfold_results, function(x) {as.mcmc.list(x$output)})
 
 
 ## SAVE OUTPUT ##
-save(mcmc_output, file='output/mcmc_output_kfold-1000.RData')
-save.image(file='output/model_workspace_kfold-1000.RData')
-#load("mcmc_output.RData")
-
+save(mcmc_output, file='output/full_no_transformation_mcmc_output_kfold-1000.RData')
 
 
 # COMBINE ALL CHAINS
@@ -715,172 +711,6 @@ classification_rates_all %>%
 classification_rates_all %>%
   summarise(classification_rate = mean(classification_rate))
 
-
-##################################.
-
-## CLASSIFICATION SCORES ##
-
-source("~/Library/CloudStorage/OneDrive-UniversityofGlasgow/Documents/PhD R Code/Forensic Glass/Full Data/classification_score_functions.R")
-
-glass_types <- c("bulb", "car window", "headlamp", "container", "building window")
-
-
-test_classification_table <- predicted_types_test %>%
-  group_by(classified, Type) %>%
-  reframe(n = n()) %>% 
-  ungroup() %>%
-  as.data.frame() %>%
-  pivot_wider(., names_from = classified, values_from = n, values_fill = 0) %>%
-  rename(bulb = `1`,
-         `car window` = `2`,
-         #headlamp = `3`,
-         container = `4`,
-         `building window` = `5`) %>%
-  arrange(Type) %>%
-  select(-Type) %>%
-  as.matrix()
-
-rownames(test_classification_table) <- glass_types
-
-test_classification_table 
-
-
-# NUMBER OF INSTANCES #
-n_instances = sum(test_classification_table) 
-
-# NUMBER OF CLASSES #
-n_class = nrow(test_classification_table) 
-
-# CORRECT CLASSIFIED #
-n_correct_classified = diag(test_classification_table)
-
-n_correct_classified <- c(n_correct_classified[1:2], 0, n_correct_classified[3:4])
-
-# NUMBER OF INSTANCES PER CLASS #
-n_instances_class = apply(test_classification_table, 2, sum) 
-
-n_instances_class = c(n_instances_class[1:2], headlamp = 0, n_instances_class[3:4])
-
-# NUMBER OF PREDICTIONS PER CLASS #
-n_predictions = apply(test_classification_table, 1, sum) 
-
-# INSTANCES OVER ACTUAL CLASS #
-d_class = n_instances_class / n_instances
-
-# INSTANCES OVER PREDICTED CLASS #
-d_predictions = n_predictions / n_instances 
-
-
-#### ACCURACY ####
-
-accuracy <- sum(n_correct_classified) / n_instances
-accuracy
-
-#### % MISSCLASSIFIED ####
-
-missclassified <- 100 - (sum(diag(test_classification_table)) / sum(test_classification_table) * 100)
-missclassified
-
-
-#### CONFUSION MATRIX ####
-
-calculate_metrics <- function(glass_type, classification_table) {
-  
-  TP <- classification_table[glass_type, glass_type]
-  FP <- sum(classification_table[glass_type, ]) - TP
-  FN <- sum(classification_table[, glass_type]) - TP
-  TN <- sum(classification_table) - (TP + FP + FN)
-  
-  return(matrix(c(TP, FP, FN, TN), nrow = 2, byrow = TRUE))
-}
-
-confusion_matrices <- list()
-for (i in 1:t) {
-  if (glass_types[[i]] == 'headlamp') {confusion_matrices[[i]] <- matrix(0, nrow = 2, ncol = 2)
-  } else {confusion_matrices[[i]] <- calculate_metrics(glass_types[[i]], test_classification_table)}
-}
-confusion_matrices
-
-
-#### PRECISION ####
-
-precision = n_correct_classified / n_predictions
-precision
-
-
-#### RECALL ####
-
-recall <- n_correct_classified / n_instances_class
-recall
-
-
-#### F1 SCORE ####
-
-F1 <- (2 * precision * recall) / (precision + recall)
-F1
-
-
-
-#### MCC ####
-# MATTHEWS CORRELATION COEFFICIENT #
-
-MCC <- function(TP, FP, TN, FN) {
-  MCC <- ((TP * TN) - (FP * FN)) / 
-    sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
-}
-
-MCC_bulb <- MCC(TP = confusion_matrices[[1]][1,1], 
-                FP = confusion_matrices[[1]][1,2],
-                FN = confusion_matrices[[1]][2,1],
-                TN = confusion_matrices[[1]][2,2])
-
-MCC_car <- MCC(TP = confusion_matrices[[2]][1,1], 
-               FP = confusion_matrices[[2]][1,2],
-               FN = confusion_matrices[[2]][2,1],
-               TN = confusion_matrices[[2]][2,2])
-
-MCC_headlamp <- MCC(TP = confusion_matrices[[3]][1,1], 
-                    FP = confusion_matrices[[3]][1,2],
-                    FN = confusion_matrices[[3]][2,1],
-                    TN = confusion_matrices[[3]][2,2])
-
-MCC_container <- MCC(TP = confusion_matrices[[4]][1,1], 
-                     FP = confusion_matrices[[4]][1,2],
-                     FN = confusion_matrices[[4]][2,1],
-                     TN = confusion_matrices[[4]][2,2])
-
-MCC_building <- MCC(TP = confusion_matrices[[5]][1,1], 
-                    FP = confusion_matrices[[5]][1,2],
-                    FN = confusion_matrices[[5]][2,1],
-                    TN = confusion_matrices[[5]][2,2])
-
-
-MCC <- matrix(c(MCC_bulb,
-                MCC_car,
-                MCC_headlamp,
-                MCC_container,
-                MCC_building),
-              ncol = 5,
-              byrow = TRUE)  %>%
-  'colnames<-'(c("bulb", "car window", "headlamp", "container", "building window"))
-MCC
-
-
-#### GOODMAN AND KRUSKAL TAU ####
-
-tbl <- cbind(test_classification_table[,1:2], headlamp = rep(0,t), test_classification_table[,3:4])
-
-GKtau(tbl)
-
-#### COHEN KAPPA ####
-
-CohenKappa(tbl)
-
-#### THIEL U ####
-
-TheilU(tbl)
-
-
 ##################################.
 
 
@@ -914,7 +744,7 @@ plot_theta <- theta_draws %>%
          Fe = '7')
 
 
-pdf('output/boxplot_full_model_no transformation.pdf', height = 4)
+pdf('output/boxplot_full_model_no_transformation.pdf', height = 4)
 plot_theta %>%
   group_by(theta) %>%
   sample_n(100) %>%    
