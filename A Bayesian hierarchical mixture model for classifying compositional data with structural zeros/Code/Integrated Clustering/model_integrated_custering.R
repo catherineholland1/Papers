@@ -6,8 +6,6 @@
 
 ## SQUARE ROOT TRANSFORMATION ##
 
-## KFOLD ##
-
 ## PREDICT NEW TYPES IN MODEL ##
 
 ## CLUSTERING IN MODEL - DCAT ##
@@ -24,11 +22,8 @@ library(tidyr)
 library(tibble)
 library(parallel)
 library(ggplot2)
-#library(GGally)
 library(mcmcplots)
 library(reshape2)
-#library(factoextra)
-library(dendextend)
 library(cluster)
 library(mnormt)
 library(class)
@@ -38,14 +33,13 @@ library(class)
 
 ## SET WORKING DIRECTORY ####
 
-setwd("~/OneDrive/Documents/PhD/R/Bayesian Hierarchical Model - Forensic Glass/Model-Based Clustering/cluster model/server")
-setwd("~/Library/CloudStorage/OneDrive-UniversityofGlasgow/Documents/PhD R Code/Forensic Glass/Integrated Clustering")
+setwd("Code/Integrated Clustering")
 
 ##################################.
 
 ## DATA ####
 
-glass <- read.table("~/Library/CloudStorage/OneDrive-UniversityofGlasgow/Documents/PhD R Code/Forensic Glass/Data/database_190310.txt", header = T)
+glass <- read.table("Data/simulated_forensic_glass.txt", header = T)
 glass$Type <- as.factor(sapply(glass$Name, function(x) substr(x, 1, 1)))
 
 ##################################.
@@ -139,11 +133,6 @@ run_MCMC <- function(X, seed,
     for (i in 1:I) {
       item_cluster[i] ~ dcat(p_cluster[1:N_cluster])
     }
-    
-    # constraint ~ dconstraint(mean_q[1] >= max(mean_q[2:N_cluster]) &
-    #                            mean_q[2] >= max(mean_q[3:N_cluster]) &
-    #                            mean_q[3] >= max(mean_q[4:N_cluster]) &
-    #                            mean_q[4] >= mean_q[5])
     
     for (cl in 1:N_cluster) {
       
@@ -455,10 +444,7 @@ mcmc_output <- lapply(kfold_results, function(x) {as.mcmc.list(x$output)})
 
 
 ## SAVE OUTPUT ##
-save(mcmc_output, file=paste0('mcmc_output_', 400000, '-', 8, 'chains-no_constraint.RData'))
-save.image(file=paste0('mcmc_workspace_', 400000, '-', 8, 'chains-no_constraint.RData'))
-#load("mcmc_output.RData")
-
+save(mcmc_output, file=paste0('output/integrated_mcmc_output_', 400000, '.RData'))
 
 
 # COMBINE ALL CHAINS
@@ -478,13 +464,6 @@ n_draws_chain = n_draws / nchains
 ##################################.
 
 ## OUTPUT ####
-
-# check_converge <- gelman.diag(mcmc_output, multivariate = FALSE, transform = TRUE, autoburnin = FALSE)$psrf
-# check_converge
-# hist(check_converge)
-# abline(v = mean(check_converge), col = 'red')
-# mean(check_converge)
-
 
 subset_theta <- function(chain) {
   cols <- grep("^theta", colnames(chain), value = TRUE)
@@ -1000,164 +979,6 @@ classification_rates_all %>%
 
 classification_rates_all %>%
   summarise(classification_rate = mean(classification_rate))
-
-
-##################################.
-
-## CLASSIFICATION SCORES ##
-
-source("~/OneDrive/Documents/PhD/R/Bayesian Hierarchical Model - Forensic Glass/Model-Based Clustering/classification_score_functions.R")
-
-glass_types <- c("bulb", "car window", "headlamp", "container", "building window")
-
-
-test_classification_table <- predicted_types_test %>%
-  group_by(classified, Type) %>%
-  reframe(n = n()) %>% 
-  ungroup() %>%
-  as.data.frame() %>%
-  pivot_wider(., names_from = classified, values_from = n, values_fill = 0) %>%
-  rename(bulb = `1`,
-         `car window` = `2`,
-         headlamp = `3`,
-         container = `4`,
-         `building window` = `5`) %>%
-  arrange(Type) %>%
-  select(-Type) %>%
-  as.matrix()
-
-rownames(test_classification_table) <- glass_types
-
-test_classification_table 
-
-
-# NUMBER OF INSTANCES #
-n_instances = sum(test_classification_table) 
-
-# NUMBER OF CLASSES #
-n_class = nrow(test_classification_table) 
-
-# CORRECT CLASSIFIED #
-n_correct_classified = diag(test_classification_table)
-
-# NUMBER OF INSTANCES PER CLASS #
-n_instances_class = apply(test_classification_table, 2, sum) 
-
-# NUMBER OF PREDICTIONS PER CLASS #
-n_predictions = apply(test_classification_table, 1, sum) 
-
-# INSTANCES OVER ACTUAL CLASS #
-d_class = n_instances_class / n_instances
-
-# INSTANCES OVER PREDICTED CLASS #
-d_predictions = n_predictions / n_instances 
-
-
-#### ACCURACY ####
-
-accuracy <- sum(n_correct_classified) / n_instances
-accuracy
-
-#### % MISSCLASSIFIED ####
-
-missclassified <- 100 - (sum(diag(test_classification_table)) / sum(test_classification_table) * 100)
-missclassified
-
-
-#### CONFUSION MATRIX ####
-
-calculate_metrics <- function(glass_type, classification_table) {
-  
-  TP <- classification_table[glass_type, glass_type]
-  FP <- sum(classification_table[glass_type, ]) - TP
-  FN <- sum(classification_table[, glass_type]) - TP
-  TN <- sum(classification_table) - (TP + FP + FN)
-  
-  return(matrix(c(TP, FP, FN, TN), nrow = 2, byrow = TRUE))
-}
-
-confusion_matrices <- list()
-for (i in 1:t) {
-  confusion_matrices[[i]] <- calculate_metrics(glass_types[[i]], test_classification_table)
-}
-confusion_matrices
-
-
-#### PRECISION ####
-
-precision = n_correct_classified / n_predictions
-precision
-
-
-#### RECALL ####
-
-recall <- n_correct_classified / n_instances_class
-recall
-
-
-#### F1 SCORE ####
-
-F1 <- (2 * precision * recall) / (precision + recall)
-F1
-
-
-
-#### MCC ####
-# MATTHEWS CORRELATION COEFFICIENT #
-
-MCC <- function(TP, FP, TN, FN) {
-  MCC <- ((TP * TN) - (FP * FN)) / 
-    sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
-}
-
-MCC_bulb <- MCC(TP = confusion_matrices[[1]][1,1], 
-                FP = confusion_matrices[[1]][1,2],
-                FN = confusion_matrices[[1]][2,1],
-                TN = confusion_matrices[[1]][2,2])
-
-MCC_car <- MCC(TP = confusion_matrices[[2]][1,1], 
-               FP = confusion_matrices[[2]][1,2],
-               FN = confusion_matrices[[2]][2,1],
-               TN = confusion_matrices[[2]][2,2])
-
-MCC_headlamp <- MCC(TP = confusion_matrices[[3]][1,1], 
-                    FP = confusion_matrices[[3]][1,2],
-                    FN = confusion_matrices[[3]][2,1],
-                    TN = confusion_matrices[[3]][2,2])
-
-MCC_container <- MCC(TP = confusion_matrices[[4]][1,1], 
-                     FP = confusion_matrices[[4]][1,2],
-                     FN = confusion_matrices[[4]][2,1],
-                     TN = confusion_matrices[[4]][2,2])
-
-MCC_building <- MCC(TP = confusion_matrices[[5]][1,1], 
-                    FP = confusion_matrices[[5]][1,2],
-                    FN = confusion_matrices[[5]][2,1],
-                    TN = confusion_matrices[[5]][2,2])
-
-
-MCC <- matrix(c(MCC_bulb,
-                MCC_car,
-                MCC_headlamp,
-                MCC_container,
-                MCC_building),
-              ncol = 5,
-              byrow = TRUE)  %>%
-  'colnames<-'(c("bulb", "car window", "headlamp", "container", "building window"))
-MCC
-
-
-#### GOODMAN AND KRUSKAL TAU ####
-
-GKtau(test_classification_table)
-
-#### COHEN KAPPA ####
-
-CohenKappa(test_classification_table)
-
-#### THIEL U ####
-
-TheilU(test_classification_table)
 
 
 ##################################.
